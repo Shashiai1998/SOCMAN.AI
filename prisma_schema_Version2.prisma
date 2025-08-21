@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String?   // optional if using OAuth-only sign-in
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  clients       Client[]  @relation("user_clients")
+  sessions      Session[]
+  connectedAccounts ConnectedAccount[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], name: "user_clients")
+  createdAt DateTime @default(now())
+
+  // e.g. the client whose accounts you manage
+  campaigns Campaign[]
+}
+
+model ConnectedAccount {
+  id               String   @id @default(cuid())
+  provider         String   // "google", "meta", "linkedin"
+  providerAccountId String
+  displayName      String?
+  accessTokenEnc   String   // encrypted token
+  refreshTokenEnc  String?  // encrypted
+  expiresAt        DateTime?
+  scope            String?
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  clientId         String?  // optional: which client this belongs to
+  client           Client?  @relation(fields: [clientId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  campaigns        Campaign[]
+  MetricSnapshots  MetricSnapshot[]
+}
+
+model Campaign {
+  id                 String   @id @default(cuid())
+  providerCampaignId String
+  name               String
+  status             String   // "ACTIVE", "PAUSED", "DRAFT", "SCHEDULED" etc
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+  clientId           String
+  client             Client   @relation(fields: [clientId], references: [id])
+  createdAt          DateTime @default(now())
+
+  MetricSnapshots    MetricSnapshot[]
+}
+
+model MetricSnapshot {
+  id                 String   @id @default(cuid())
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+  campaignId         String?
+  campaign           Campaign? @relation(fields: [campaignId], references: [id])
+  date               DateTime
+  impressions        Int?
+  clicks             Int?
+  spendMicros        BigInt?   // store micros where applicable
+  conversions        Int?
+  raw               Json?     // raw provider response for audit
+  createdAt          DateTime  @default(now())
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  expires      DateTime
+  sessionToken String   @unique
+  createdAt    DateTime @default(now())
+}
